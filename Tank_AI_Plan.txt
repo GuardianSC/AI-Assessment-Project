@@ -1,0 +1,25 @@
+Cannon States:
+
+	STATIONARY-Cannon doesn't move
+	
+	LOOK-Cannon rotates in a circle looking for a target
+	
+	AIM-When cannon detects a target, cannon tracks it
+	
+	FIRE-After a few seconds of tracking the target, cannon fires. Try to get it to predict where target will move to lead the shot for better chance of a successful shot
+
+	PANICFIRE-Cannon randomly fires a few shots
+
+	
+Tank States:
+	MOVEFORWARD-Tank moves forward
+	
+	MOVEBACKWARD-Tank moves backward
+	
+	TURNLEFT-Tank turns left
+	
+	TURNRIGHT-Tank turns right
+	
+	STOP-Tank doesn't move
+		
+	INVESTIGATE-When an enemy is out of sight amd fires, detect the 			    direction and move towards it
