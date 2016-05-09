@@ -10,79 +10,83 @@
 #include "sfwdraw.h"
 
 /*
-    Example dumb agent.
+Example dumb agent.
 
-    State Description:
-        
+State Description:
 
-        Cannon:
-            SCAN:
-                Turns Right
-                enemy in sight? -> Set Target, FIRE
-            FIRE:
-                Fire weapon
-                -> SCAN
 
-        Tank:
-            Explore:
-                If touching Target, set random Target
-                Path to Target                
+Cannon:
+SCAN:
+Turns Right
+enemy in sight? -> Set Target, FIRE
+FIRE:
+Fire weapon
+-> SCAN
+
+Tank:
+Explore:
+If touching Target, set random Target
+Path to Target
 */
 
-inline int behaviorSwitch(int min, int max)
+class AutoAgent : public IAgent
 {
-	return rand() % (max - min) + min;
-}
+	// Cache current battle data on each update
+	tankNet::TankBattleStateData current;
 
-class AutoAgent : public IAgent 
-{
-    // Cache current battle data on each update
-    tankNet::TankBattleStateData current;
+	// output data that we will return at end of update
+	tankNet::TankBattleCommand tbc;
 
-    // output data that we will return at end of update
-    tankNet::TankBattleCommand tbc;
-
-    // Could use this to keep track of the environment, check out the header.
-    Grid map;
+	// Could use this to keep track of the environment, check out the header.
+	Grid map;
 
 	//USEFUL FUNCTIONS TO IMPLEMENT: lookToward(target), moveToward(target), turnToward(target), checkForObstacles()
 
-    //////////////////////
-    // States for turret and tank
-    enum TURRET { SCAN, AIM,    FIRE,	PANICFIRE, LOOKTOWARD			} turretState = LOOKTOWARD;
-    enum TANK   { SEEK, PATROL, FOLLOW, INVESTIGATE, MOVETOWARD, HALT         } tankState   = HALT;
+	//////////////////////
+	// States for turret and tank
+	enum TURRET { SCAN, AIM, FIRE, PANICFIRE,  } turretState = SCAN;
+	enum TANK { SEEK, PATROL, FOLLOW, INVESTIGATE, LOOKTOWARD, MOVETOWARD, TURNTOWARD, HALT } tankState = SEEK;
 
-    float randTimer = 0;
-	//float behaviorSwitch = 0;
+	float randTimer = 0;
+	float stateTimer = 3;
+	float stateTimer1 = 3;
+	float stateTimer2 = 3;
 
-    // Active target location to pursue
-    Vector2 target;
+	// Active target location to pursue
+	Vector2 target;
 
 #pragma region Turret
-    //////////////////////////////////////////
-    //	      T   U   R   R   E   T	        //
+	//////////////////////////////////////////
+	//	      T   U   R   R   E   T	        //
 	//////////////////////////////////////////
 
-    void scan()
-    {
-        Vector2 tf = Vector2::fromXZ(current.cannonForward);  // current forward
-        Vector2 cp = Vector2::fromXZ(current.position); // current position
+	void scan()
+	{
+		Vector2 tf = Vector2::fromXZ(current.cannonForward);  // current forward
+		Vector2 cp = Vector2::fromXZ(current.position); // current position
 
-        tbc.fireWish = false;
-        // Arbitrarily look around for an enemy.
-        tbc.cannonMove = tankNet::CannonMovementOptions::RIGHT;
+		tbc.fireWish = false;
+		// Arbitrarily look around for an enemy.
+		tbc.cannonMove = tankNet::CannonMovementOptions::RIGHT;
 
-        // Search through the possible enemy targets
-        for (int aimTarget = 0; aimTarget < current.playerCount - 1; ++aimTarget)
-            if (current.tacticoolData[aimTarget].inSight && current.canFire) // if in Sight and we can fire
-            {
-                target = Vector2::fromXZ(current.tacticoolData[aimTarget].lastKnownPosition);
-             
-                if(dot(tf, normal(target-cp)) > .87f)
-                    turretState = FIRE;
-                break;
-            }
-    }
+		// Search through the possible enemy targets
+		for (int aimTarget = 0; aimTarget < current.playerCount - 1; ++aimTarget)
+			if (current.tacticoolData[aimTarget].inSight && current.canFire) // if in Sight and we can fire
+			{
+				target = Vector2::fromXZ(current.tacticoolData[aimTarget].lastKnownPosition);
+
+				if (dot(tf, normal(target - cp)) > .87f)
+					turretState = FIRE;
+				break;
+			}
+
+		stateTimer -= sfw::getDeltaTime();
+		if (stateTimer <= 0)
+		{
+			stateTimer = rand() % 4 + 2;
+			turretState = PANICFIRE;
+		}
+	}
 
 	void panic() // Fires a few shots in tank forward direction
 	{
@@ -94,27 +98,23 @@ class AutoAgent : public IAgent
 			tbc.fireWish = current.canFire;
 			//randTimer = rand() % 4 + 2;
 		}
-	 }
 
-    void fire()
-    {
-        // No special logic for now, just shoot.
-        tbc.fireWish = current.canFire;
-        turretState = SCAN;
-    }
-
-	void lookToward(Vector2 target)
-	{
-		Vector2 cp = Vector2::fromXZ(current.position); // current position
-		Vector2 cf = Vector2::fromXZ(current.forward);  // current forward
-		target = Vector2::random() * Vector2 { 50, 50 };
-
-		Vector2 tf = normal(target - cp);
-
-		if (dot(cf, tf) > .87f)
-		// turn right until we line up!
-			tbc.cannonMove = tankNet::CannonMovementOptions::RIGHT;
+		stateTimer -= sfw::getDeltaTime();
+		if (stateTimer <= 0)
+		{
+			stateTimer = rand() % 2 + 1;
+			turretState = SCAN;
+		}
 	}
+
+	void fire()
+	{
+		// No special logic for now, just shoot.
+		tbc.fireWish = current.canFire;
+		turretState = SCAN;
+	}
+
+	
 #pragma endregion
 
 #pragma region Tank
@@ -130,12 +130,26 @@ class AutoAgent : public IAgent
 		tbc.tankMove = tankNet::TankMovementOptions::HALT;
 	}
 
+	void turnToward(Vector2 target)
+	{
+		Vector2 cp = Vector2::fromXZ(current.position); // current position
+		Vector2 cf = Vector2::fromXZ(current.forward);  // current forward
+		target = Vector2::random() * Vector2 { 50, 50 };
+
+		Vector2 tf = normal(target - cp);
+
+		if (dot(cf, tf) > .87f)
+			tbc.tankMove = tankNet::TankMovementOptions::HALT;
+		else
+			// turn right until we line up!
+			tbc.tankMove = tankNet::TankMovementOptions::RIGHT;
+	}
 	void moveToward(Vector2 target)
 	{
 		Vector2 cp = Vector2::fromXZ(current.position); // current position
 		Vector2 cf = Vector2::fromXZ(current.forward);  // current forward
 
-		target = Vector2::random() * Vector2 { 50, 50 };
+		
 
 		if (distance(target, cp) < 20)
 		{
@@ -145,9 +159,26 @@ class AutoAgent : public IAgent
 		// determine the forward to the target (which is the next waypoint in the path)
 		Vector2 tf = normal(target - cp);
 
-		if (dot(cf, tf) > .87f) // if the dot product is close to lining up, move forward
-			tbc.tankMove = tankNet::TankMovementOptions::FWRD;
-		else // otherwise turn right until we line up!
+		tbc.tankMove = tankNet::TankMovementOptions::FWRD;
+	    // otherwise turn right until we line up!
+			tbc.tankMove = tankNet::TankMovementOptions::HALT;
+	}
+
+	void lookToward(Vector2 target)
+	{
+		Vector2 cp = Vector2::fromXZ(current.position); // current position
+		Vector2 cf = Vector2::fromXZ(current.forward);  // current forward
+		target = Vector2::random() * Vector2 { 50, 50 };
+
+		Vector2 tf = normal(target - cp);
+
+		if (dot(cf, tf) > .87f)
+		{
+			tbc.tankMove = tankNet::TankMovementOptions::HALT;
+			//moveToward(target);
+		}
+		// turn right until we line up!
+		else
 			tbc.tankMove = tankNet::TankMovementOptions::RIGHT;
 	}
 
@@ -174,8 +205,22 @@ class AutoAgent : public IAgent
 			tbc.tankMove = tankNet::TankMovementOptions::RIGHT;
 
 		for (int aimTarget = 0; aimTarget < current.playerCount - 1; ++aimTarget)
-			if (!current.tacticoolData[aimTarget].inSight) // if out of Sight and 
-				investigate();
+			if (current.tacticoolData[aimTarget].inSight)
+				if (!current.tacticoolData[aimTarget].inSight) // if out of Sight 
+					tankState = INVESTIGATE;
+
+		stateTimer1 -= sfw::getDeltaTime();
+		if (stateTimer1 <= 0)
+		{
+			stateTimer1 = rand() % 6 + 4;
+			//tankState = LOOKTOWARD;
+		}
+		stateTimer2 -= sfw::getDeltaTime();
+		if (stateTimer2 <= 0)
+		{
+			stateTimer2 = rand() % 10 + 7;
+			//tankState = PATROL;
+		}
 	}
 
 	void patrol() // move between two points 
@@ -195,7 +240,7 @@ class AutoAgent : public IAgent
 		// determine the forward to the target (which is the next waypoint in the path)
 		Vector2 tf = normal(target - cp); // (where you want to go - where you currently are)
 
-		// if the dot product is close to lining up, move forward
+										  // if the dot product is close to lining up, move forward
 		if (dot(cf, tf) > .87f) // (cannon forward, target forward)
 			tbc.tankMove = tankNet::TankMovementOptions::FWRD;
 		// otherwise turn right until we line up
@@ -211,7 +256,7 @@ class AutoAgent : public IAgent
 		// determine the forward to the target (which is the next waypoint in the path)
 		Vector2 tf2 = normal(target2 - cp); // (where you want to go - where you currently are)
 
-		// if the dot product is close to lining up, move forward
+											// if the dot product is close to lining up, move forward
 		if (dot(cf, tf2) > .87f) // (cannon forward, target2 forward)
 			tbc.tankMove = tankNet::TankMovementOptions::FWRD;
 		// otherwise turn right until we line up
@@ -244,40 +289,42 @@ class AutoAgent : public IAgent
 	{
 		Vector2 cp = Vector2::fromXZ(current.position); // current position
 		Vector2 cf = Vector2::fromXZ(current.forward);  // current forward
-		
-		// determine the forward to the target (which is the next waypoint in the path)
+
+														// determine the forward to the target (which is the next waypoint in the path)
 		Vector2 tf = normal(target - cp);
 
 		for (int aimTarget = 0; aimTarget < current.playerCount - 1; ++aimTarget)
 			if (current.tacticoolData[aimTarget].inSight && current.canFire)
-				target = Vector2::fromXZ(current.tacticoolData[aimTarget].lastKnownPosition);
+				tankState = FOLLOW;
 	}
 #pragma endregion
 
 public:
-    tankNet::TankBattleCommand update(tankNet::TankBattleStateData *state)
-    {
-        current = *state;
-        tbc.msg = tankNet::TankBattleMessage::GAME;
+	tankNet::TankBattleCommand update(tankNet::TankBattleStateData *state)
+	{
+		current = *state;
+		tbc.msg = tankNet::TankBattleMessage::GAME;
 
-        switch (turretState)
-        {
-        case SCAN: scan(); break;
-        case FIRE: fire(); break;
+		switch (turretState)
+		{
+		case SCAN: scan(); break;
+		case FIRE: fire(); break;
 		case PANICFIRE: panic(); break;
-		case LOOKTOWARD: lookToward(target); break;
-        }
+		
+		}
 
-        switch (tankState)
-        {
+		switch (tankState)
+		{
 		case HALT: halt(); break;
-        case SEEK: seek(); break;
+		case SEEK: seek(); break;
 		case PATROL: patrol(); break;
 		case FOLLOW: follow(); break;
-		case INVESTIGATE: investigate(); break; 
+		case INVESTIGATE: investigate(); break;
+		case LOOKTOWARD: lookToward(target); break;
 		case MOVETOWARD: moveToward(target); break;
-        }
+		//case TURNTOWARD: turnToward(target); break;
+		}
 
-        return tbc;
-    }
+		return tbc;
+	}
 };

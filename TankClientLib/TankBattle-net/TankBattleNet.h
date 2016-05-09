@@ -12,7 +12,7 @@ namespace tankNet
     // - serverAddress :: IP address of server, defaults to 127.0.0.1 (AKA localhost)
     // - serverPort :: listening port on server
     // Returns true if the host server could be resolved, otherwise returns false
-    bool init(char * serverAddress="127.0.0.1", int serverPort = 11000);
+    bool init(char * serverAddress="10.15.22.73", int serverPort = 11000);
 
     // Sends data upstream and checks the TCP queue for any information
     // - timeToBlock :: Time in seconds to block execution while waiting for information.

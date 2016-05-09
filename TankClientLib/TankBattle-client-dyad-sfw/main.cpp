@@ -34,7 +34,7 @@ int main(int argc, char** argv)
     if (argc > 2)
     {
         std::cout << "Unsupported number of arguments." << std::endl;
-        std::cout << "Specify the IP address of the target server. Ex: " << argv[0] << " 127.0.0.1" << std::endl;
+        std::cout << "Specify the IP address of the target server. Ex: " << argv[0] << " 10.15.22.73" << std::endl;
 
         return EXIT_FAILURE;
     }
